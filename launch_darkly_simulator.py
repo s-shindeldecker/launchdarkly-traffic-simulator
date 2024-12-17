@@ -17,12 +17,10 @@ def setup_logging(log_file='simulator.log'):
     logger = logging.getLogger('LaunchDarklySimulator')
     logger.setLevel(logging.INFO)
     
-    # Create rotating file handler
     handler = RotatingFileHandler(log_file, maxBytes=1024*1024, backupCount=5)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     
-    # Add console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     
@@ -41,31 +39,18 @@ def setup_faker():
     """Setup Faker with custom providers"""
     fake = Faker()
     
-    # Define custom providers using DynamicProvider
-    brands_provider = DynamicProvider(
-        provider_name="brand",
-        elements=["Admiral", "Diamond", "Elephant", "Toothbrush", "Biscuit"]
+    user_type_provider = DynamicProvider(
+        provider_name="user_type",
+        elements=["new", "returning", "premium", "basic"]
     )
     
-    price_provider = DynamicProvider(
-        provider_name="price",
-        elements=[93.84, 143.73, 101.35, 86.02, 46.91, 125.62, 77.85, 99.68, 73.99, 148.79]
+    region_provider = DynamicProvider(
+        provider_name="region",
+        elements=["north", "south", "east", "west"]
     )
     
-    product_provider = DynamicProvider(
-        provider_name="product",
-        elements=["Car", "Home", "Motorcycle", "Renters"]
-    )
-    
-    tier_provider = DynamicProvider(
-        provider_name="tier",
-        elements=["Bronze", "Silver", "Gold", "Platinum"]
-    )
-    
-    fake.add_provider(brands_provider)
-    fake.add_provider(price_provider)
-    fake.add_provider(product_provider)
-    fake.add_provider(tier_provider)
+    fake.add_provider(user_type_provider)
+    fake.add_provider(region_provider)
     
     return fake
 
@@ -73,45 +58,45 @@ def generate_user_data(fake):
     """Generate fake user data"""
     return {
         'user_id': fake.uuid4(),
-        'brand': fake.brand(),
-        'price': fake.price(),
-        'product': fake.product(),
-        'tier': fake.tier()
+        'user_type': fake.user_type(),
+        'region': fake.region(),
+        'age': random.randint(18, 80)
     }
 
 def get_tracking_probability(user_data, base_prob, target_attribute=None, target_value=None, boost_factor=1.5):
     """Determine tracking probability based on user attributes"""
     if target_attribute and target_value:
-        # Convert both to lowercase for case-insensitive comparison
-        if target_attribute.lower() in ['brand', 'product', 'tier'] and \
-           user_data[target_attribute.lower()].lower() == target_value.lower():
-            return min(1.0, base_prob * boost_factor)
-        # Handle price separately as it's numeric
-        elif target_attribute.lower() == 'price' and \
-             abs(float(user_data['price']) - float(target_value)) < 0.01:
+        if str(user_data.get(target_attribute, '')).lower() == str(target_value).lower():
             return min(1.0, base_prob * boost_factor)
     return base_prob
 
-def simulate_traffic(client, fake, num_records, control_prob, treatment_prob, delay, logger, target_attribute=None, target_value=None):
+def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, treatment_prob, 
+                    delay, logger, target_attribute=None, target_value=None, 
+                    enable_tracking=True, metric_name=None):
     """Simulate user traffic with LaunchDarkly flag evaluation"""
+    default_metric_name = f"flag-{feature_flag_key}-evaluation"
+    actual_metric_name = metric_name if metric_name else default_metric_name
+
     for i in range(num_records):
         try:
             user_data = generate_user_data(fake)
             
+            # Create user context with generated data
             user_context = Context.builder(user_data['user_id']) \
                 .kind("user") \
-                .set("brand", user_data['brand']) \
-                .set("product", user_data['product']) \
-                .set("tier", user_data['tier']) \
+                .set("userType", user_data['user_type']) \
+                .set("region", user_data['region']) \
+                .set("age", user_data['age']) \
                 .build()
 
-            # Evaluate flag
+            # Evaluate feature flag
             variation_detail = client.variation_detail(
-                "show-sponsored-product", 
+                feature_flag_key,
                 user_context, 
-                'false'
+                False
             )
 
+            # Determine tracking probability
             base_prob = treatment_prob if variation_detail.value else control_prob
             actual_prob = get_tracking_probability(
                 user_data, 
@@ -120,14 +105,22 @@ def simulate_traffic(client, fake, num_records, control_prob, treatment_prob, de
                 target_value
             )
 
-            if random.random() < actual_prob:
-                client.track("in-cart-total-price", user_context, metric_value=user_data['price'])
-                client.track("customer-checkout", user_context)
+            # Track event if enabled and probability threshold is met
+            if enable_tracking and random.random() < actual_prob:
+                client.track(actual_metric_name, user_context)
+                
                 logger.info(
-                    f"Tracked event for user {user_data['user_id']} - "
-                    f"Brand: {user_data['brand']}, Product: {user_data['product']}, "
-                    f"Tier: {user_data['tier']}, Price: {user_data['price']} "
-                    f"(Probability: {actual_prob:.2f})"
+                    f"Tracked event '{actual_metric_name}' for user {user_data['user_id']} - "
+                    f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
+                    f"Age: {user_data['age']} "
+                    f"(Flag Value: {variation_detail.value}, Probability: {actual_prob:.2f})"
+                )
+            else:
+                logger.info(
+                    f"Evaluated flag '{feature_flag_key}' for user {user_data['user_id']} - "
+                    f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
+                    f"Age: {user_data['age']} "
+                    f"(Flag Value: {variation_detail.value}, Tracking: {'Disabled' if not enable_tracking else 'Not Selected'})"
                 )
 
             time.sleep(delay)
@@ -141,20 +134,26 @@ def simulate_traffic(client, fake, num_records, control_prob, treatment_prob, de
 def main():
     parser = argparse.ArgumentParser(description='LaunchDarkly Traffic Simulator')
     parser.add_argument('--sdk-key', required=True, help='LaunchDarkly SDK key')
+    parser.add_argument('--feature-flag', required=True, help='Feature flag key to evaluate')
     parser.add_argument('--num-records', type=int, default=100, help='Number of records to generate')
     parser.add_argument('--control-prob', type=float, default=0.3, help='Control probability')
     parser.add_argument('--treatment-prob', type=float, default=0.35, help='Treatment probability')
     parser.add_argument('--delay', type=float, default=0.05, help='Delay between records in seconds')
     parser.add_argument('--log-file', default='simulator.log', help='Log file path')
-    parser.add_argument('--target-attribute', choices=['brand', 'product', 'price', 'tier'], 
+    parser.add_argument('--target-attribute', choices=['user_type', 'region', 'age'], 
                         help='Target attribute to boost probability for')
     parser.add_argument('--target-value', help='Target value for the specified attribute')
+    parser.add_argument('--enable-tracking', action='store_true', help='Enable event tracking')
+    parser.add_argument('--metric-name', help='Custom metric name for tracking events')
 
     args = parser.parse_args()
     
     # Setup logging
     logger = setup_logging(args.log_file)
     logger.info("Starting LaunchDarkly Traffic Simulator")
+    logger.info(f"Event tracking is {'enabled' if args.enable_tracking else 'disabled'}")
+    if args.enable_tracking and args.metric_name:
+        logger.info(f"Using custom metric name: {args.metric_name}")
 
     if bool(args.target_attribute) != bool(args.target_value):
         logger.error("Both target-attribute and target-value must be provided together")
@@ -173,6 +172,7 @@ def main():
         # Run simulation
         simulate_traffic(
             client=client,
+            feature_flag_key=args.feature_flag,
             fake=fake,
             num_records=args.num_records,
             control_prob=args.control_prob,
@@ -180,7 +180,9 @@ def main():
             delay=args.delay,
             logger=logger,
             target_attribute=args.target_attribute,
-            target_value=args.target_value
+            target_value=args.target_value,
+            enable_tracking=args.enable_tracking,
+            metric_name=args.metric_name
         )
 
         logger.info("Simulation completed successfully")
