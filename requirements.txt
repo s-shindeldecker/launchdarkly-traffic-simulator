@@ -1,2 +1,9 @@
-launchdarkly-server-sdk>=7.0.0
-faker>=20.0.0
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+nbformat>=4.2.0
+ipywidgets
+faker
+ldclient-py
