@@ -11,6 +11,7 @@ import random
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
+import os
 
 def setup_logging(log_file='simulator.log'):
     """Configure logging with rotation"""
@@ -133,7 +134,7 @@ def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, 
 
 def main():
     parser = argparse.ArgumentParser(description='LaunchDarkly Traffic Simulator')
-    parser.add_argument('--sdk-key', required=True, help='LaunchDarkly SDK key')
+    parser.add_argument('--sdk-key', help='LaunchDarkly SDK key (can also be set via LAUNCHDARKLY_SDK_KEY environment variable)')
     parser.add_argument('--feature-flag', required=True, help='Feature flag key to evaluate')
     parser.add_argument('--num-records', type=int, default=100, help='Number of records to generate')
     parser.add_argument('--control-prob', type=float, default=0.3, help='Control probability')
@@ -159,9 +160,15 @@ def main():
         logger.error("Both target-attribute and target-value must be provided together")
         sys.exit(1)
 
+    # Get SDK key from command line or environment variable
+    sdk_key = args.sdk_key or os.environ.get('LAUNCHDARKLY_SDK_KEY')
+    if not sdk_key:
+        logger.error("LaunchDarkly SDK key must be provided via --sdk-key or LAUNCHDARKLY_SDK_KEY environment variable")
+        sys.exit(1)
+
     try:
         # Initialize LaunchDarkly
-        client = initialize_launchdarkly(args.sdk_key)
+        client = initialize_launchdarkly(sdk_key)
         if not client.is_initialized():
             logger.error("LaunchDarkly client failed to initialize")
             sys.exit(1)

@@ -45,35 +45,49 @@ cd launchdarkly-traffic-simulator
 pip install -r requirements.txt
 ```
 
+3. Set up your LaunchDarkly SDK key:
+```bash
+# For bash/zsh
+export LAUNCHDARKLY_SDK_KEY='your-sdk-key'
+
+# For Windows Command Prompt
+set LAUNCHDARKLY_SDK_KEY=your-sdk-key
+
+# For Windows PowerShell
+$env:LAUNCHDARKLY_SDK_KEY='your-sdk-key'
+```
+
+You can also add this to your shell's profile file (.bashrc, .zshrc, etc.) to make it permanent.
+
 ## Usage
 
-The simulator is run using Python with various command-line arguments:
+The simulator is run using Python with various command-line arguments. The SDK key can be provided either via the LAUNCHDARKLY_SDK_KEY environment variable (recommended) or the --sdk-key parameter.
 
 ```bash
-# Basic usage (generates 100 records)
-python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY
+# Basic usage with SDK key from environment variable
+python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY
 
 # Custom number of records with event tracking
-python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
     --num-records 1000 --enable-tracking
 
 # Target specific attributes (1.5x probability boost)
-python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
     --target-attribute user_type --target-value premium
 
 # Custom event tracking with specific probabilities
-python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
     --enable-tracking --metric-name "custom-metric" \
     --control-prob 0.4 --treatment-prob 0.45
 ```
 
 ### Required Parameters
 
-- `--sdk-key`: Your LaunchDarkly SDK key
 - `--feature-flag`: The feature flag key to evaluate
 
 ### Optional Parameters
 
+- `--sdk-key`: LaunchDarkly SDK key (recommended to use LAUNCHDARKLY_SDK_KEY environment variable instead)
 - `--num-records`: Number of records to generate (default: 100)
 - `--control-prob`: Base probability for control group (default: 0.3)
 - `--treatment-prob`: Base probability for treatment group (default: 0.35)
