@@ -1,14 +1,13 @@
 # LaunchDarkly Traffic Simulator
 
-A configurable traffic simulator for LaunchDarkly feature flags that generates synthetic user data and events with customizable targeting rules.
+A configurable traffic simulator for LaunchDarkly feature flags that generates synthetic user data and events with randomized context attributes.
 
 ## Features
 
-- Generate synthetic user traffic with configurable attributes:
+- Generate synthetic user traffic with automatically randomized attributes:
   - User Type (new, returning, premium, basic)
   - Region (north, south, east, west)
   - Age (random between 18-80)
-- Target specific user segments with boosted probability
 - Configurable simulation parameters:
   - Number of records
   - Control/Treatment probabilities
@@ -71,10 +70,6 @@ python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY
 python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
     --num-records 1000 --enable-tracking
 
-# Target specific attributes (1.5x probability boost)
-python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
-    --target-attribute user_type --target-value premium
-
 # Custom event tracking with specific probabilities
 python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
     --enable-tracking --metric-name "custom-metric" \
@@ -95,14 +90,13 @@ python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
 - `--log-file`: Custom log file path (default: simulator.log)
 - `--enable-tracking`: Enable event tracking (flag)
 - `--metric-name`: Custom metric name for tracking events
-- Targeting parameters (must be used together):
-  - `--target-attribute`: Attribute to target (user_type, region, or age)
-  - `--target-value`: Value to target for the specified attribute
 
-### Available Values
+### Context Attributes
 
-- User Types: new, returning, premium, basic
-- Regions: north, south, east, west
+Each simulated user context automatically includes random values for all available attributes:
+
+- User Type: Randomly selected from [new, returning, premium, basic]
+- Region: Randomly selected from [north, south, east, west]
 - Age: Random integer between 18 and 80
 
 ## Data Analysis
@@ -125,7 +119,6 @@ The simulator creates detailed logs including:
 - User context attributes (user type, region, age)
 - Flag evaluation results
 - Event tracking details
-- Targeting probabilities
 - Processing status
 
 Logs are automatically rotated (1MB per file, maximum 5 backup files) to prevent excessive disk usage.
@@ -139,7 +132,6 @@ Example log entry:
 
 The simulator includes robust error handling for:
 - LaunchDarkly client initialization failures
-- Invalid targeting configurations
 - Record processing errors
 - Network connectivity issues
 

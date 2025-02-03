@@ -56,7 +56,7 @@ def setup_faker():
     return fake
 
 def generate_user_data(fake):
-    """Generate fake user data"""
+    """Generate fake user data with all attributes"""
     return {
         'user_id': fake.uuid4(),
         'user_type': fake.user_type(),
@@ -64,16 +64,8 @@ def generate_user_data(fake):
         'age': random.randint(18, 80)
     }
 
-def get_tracking_probability(user_data, base_prob, target_attribute=None, target_value=None, boost_factor=1.5):
-    """Determine tracking probability based on user attributes"""
-    if target_attribute and target_value:
-        if str(user_data.get(target_attribute, '')).lower() == str(target_value).lower():
-            return min(1.0, base_prob * boost_factor)
-    return base_prob
-
 def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, treatment_prob, 
-                    delay, logger, target_attribute=None, target_value=None, 
-                    enable_tracking=True, metric_name=None):
+                    delay, logger, enable_tracking=True, metric_name=None):
     """Simulate user traffic with LaunchDarkly flag evaluation"""
     default_metric_name = f"flag-{feature_flag_key}-evaluation"
     actual_metric_name = metric_name if metric_name else default_metric_name
@@ -82,7 +74,7 @@ def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, 
         try:
             user_data = generate_user_data(fake)
             
-            # Create user context with generated data
+            # Create user context with all generated data
             user_context = Context.builder(user_data['user_id']) \
                 .kind("user") \
                 .set("userType", user_data['user_type']) \
@@ -97,24 +89,16 @@ def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, 
                 False
             )
 
-            # Determine tracking probability
-            base_prob = treatment_prob if variation_detail.value else control_prob
-            actual_prob = get_tracking_probability(
-                user_data, 
-                base_prob, 
-                target_attribute, 
-                target_value
-            )
-
             # Track event if enabled and probability threshold is met
-            if enable_tracking and random.random() < actual_prob:
+            base_prob = treatment_prob if variation_detail.value else control_prob
+            if enable_tracking and random.random() < base_prob:
                 client.track(actual_metric_name, user_context)
                 
                 logger.info(
                     f"Tracked event '{actual_metric_name}' for user {user_data['user_id']} - "
                     f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
                     f"Age: {user_data['age']} "
-                    f"(Flag Value: {variation_detail.value}, Probability: {actual_prob:.2f})"
+                    f"(Flag Value: {variation_detail.value}, Probability: {base_prob:.2f})"
                 )
             else:
                 logger.info(
@@ -141,9 +125,6 @@ def main():
     parser.add_argument('--treatment-prob', type=float, default=0.35, help='Treatment probability')
     parser.add_argument('--delay', type=float, default=0.05, help='Delay between records in seconds')
     parser.add_argument('--log-file', default='simulator.log', help='Log file path')
-    parser.add_argument('--target-attribute', choices=['user_type', 'region', 'age'], 
-                        help='Target attribute to boost probability for')
-    parser.add_argument('--target-value', help='Target value for the specified attribute')
     parser.add_argument('--enable-tracking', action='store_true', help='Enable event tracking')
     parser.add_argument('--metric-name', help='Custom metric name for tracking events')
 
@@ -155,10 +136,6 @@ def main():
     logger.info(f"Event tracking is {'enabled' if args.enable_tracking else 'disabled'}")
     if args.enable_tracking and args.metric_name:
         logger.info(f"Using custom metric name: {args.metric_name}")
-
-    if bool(args.target_attribute) != bool(args.target_value):
-        logger.error("Both target-attribute and target-value must be provided together")
-        sys.exit(1)
 
     # Get SDK key from command line or environment variable
     sdk_key = args.sdk_key or os.environ.get('LAUNCHDARKLY_SDK_KEY')
@@ -186,8 +163,6 @@ def main():
             treatment_prob=args.treatment_prob,
             delay=args.delay,
             logger=logger,
-            target_attribute=args.target_attribute,
-            target_value=args.target_value,
             enable_tracking=args.enable_tracking,
             metric_name=args.metric_name
         )
