@@ -1,27 +1,36 @@
 # LaunchDarkly Traffic Simulator
 
-A configurable traffic simulator for LaunchDarkly feature flags that generates synthetic user data and events with customizable targeting.
+A configurable traffic simulator for LaunchDarkly feature flags that generates synthetic user data and events with customizable targeting rules.
 
 ## Features
 
 - Generate synthetic user traffic with configurable attributes:
-  - Brand (Admiral, Diamond, Elephant, Toothbrush, Biscuit)
-  - Product (Car, Home, Motorcycle, Renters)
-  - Tier (Bronze, Silver, Gold, Platinum)
-  - Price (Various preset values)
+  - User Type (new, returning, premium, basic)
+  - Region (north, south, east, west)
+  - Age (random between 18-80)
 - Target specific user segments with boosted probability
 - Configurable simulation parameters:
   - Number of records
   - Control/Treatment probabilities
   - Delay between events
-  - Targeting attributes and values
+  - Event tracking options
+  - Custom metric names
 - Detailed logging with rotation
+- Data analysis and visualization capabilities
 
 ## Requirements
 
 - Python 3.x
-- LaunchDarkly SDK
-- Faker library
+- Required Python packages (install via requirements.txt):
+  - ldclient-py (LaunchDarkly SDK)
+  - faker (Synthetic data generation)
+  - pandas (Data manipulation)
+  - numpy (Numerical operations)
+  - matplotlib (Basic plotting)
+  - seaborn (Statistical visualizations)
+  - plotly (Interactive visualizations)
+  - ipywidgets (Jupyter notebook widgets)
+  - nbformat (Notebook format support)
 
 ## Installation
 
@@ -38,66 +47,89 @@ pip install -r requirements.txt
 
 ## Usage
 
-The simulator can be run using the provided shell script:
+The simulator is run using Python with various command-line arguments:
 
 ```bash
 # Basic usage (generates 100 records)
-./run_simulator.sh
+python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY
 
-# Custom number of records
-./run_simulator.sh --num-records 1000
+# Custom number of records with event tracking
+python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+    --num-records 1000 --enable-tracking
 
 # Target specific attributes (1.5x probability boost)
-./run_simulator.sh --brand Toothbrush
-./run_simulator.sh --product Car
-./run_simulator.sh --tier Gold
-./run_simulator.sh --price 93.84
+python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+    --target-attribute user_type --target-value premium
 
-# Combine parameters
-./run_simulator.sh --num-records 500 --product Car --control-prob 0.4 --treatment-prob 0.45
+# Custom event tracking with specific probabilities
+python launch_darkly_simulator.py --sdk-key YOUR_SDK_KEY --feature-flag YOUR_FLAG_KEY \
+    --enable-tracking --metric-name "custom-metric" \
+    --control-prob 0.4 --treatment-prob 0.45
 ```
 
-### Parameters
+### Required Parameters
+
+- `--sdk-key`: Your LaunchDarkly SDK key
+- `--feature-flag`: The feature flag key to evaluate
+
+### Optional Parameters
 
 - `--num-records`: Number of records to generate (default: 100)
 - `--control-prob`: Base probability for control group (default: 0.3)
 - `--treatment-prob`: Base probability for treatment group (default: 0.35)
 - `--delay`: Delay between records in seconds (default: 0.05)
-- `--log-file`: Custom log file path
-- Targeting parameters:
-  - `--brand`: Target specific brand
-  - `--product`: Target specific product
-  - `--tier`: Target specific tier
-  - `--price`: Target specific price
+- `--log-file`: Custom log file path (default: simulator.log)
+- `--enable-tracking`: Enable event tracking (flag)
+- `--metric-name`: Custom metric name for tracking events
+- Targeting parameters (must be used together):
+  - `--target-attribute`: Attribute to target (user_type, region, or age)
+  - `--target-value`: Value to target for the specified attribute
 
 ### Available Values
 
-- Brands: Admiral, Diamond, Elephant, Toothbrush, Biscuit
-- Products: Car, Home, Motorcycle, Renters
-- Tiers: Bronze, Silver, Gold, Platinum
-- Prices: 93.84, 143.73, 101.35, 86.02, 46.91, 125.62, 77.85, 99.68, 73.99, 148.79
+- User Types: new, returning, premium, basic
+- Regions: north, south, east, west
+- Age: Random integer between 18 and 80
 
-## CRON Usage
+## Data Analysis
 
-To schedule regular simulations, add entries to your crontab:
+The project includes a Jupyter notebook (`Simulate_Percent_Rollout.ipynb`) for analyzing and visualizing the simulation results. The notebook provides:
+- Data loading and preprocessing
+- Statistical analysis of flag evaluations
+- Distribution visualizations
+- Targeting effectiveness analysis
+- Interactive plots and widgets
 
+To use the notebook:
 ```bash
-# Run every day at 2 AM
-0 2 * * * /path/to/run_simulator.sh
-
-# Run every 6 hours with targeting
-0 */6 * * * /path/to/run_simulator.sh --product Car --num-records 1000
+jupyter notebook Simulate_Percent_Rollout.ipynb
 ```
 
 ## Logging
 
 The simulator creates detailed logs including:
-- User context attributes
+- User context attributes (user type, region, age)
 - Flag evaluation results
-- Tracking probabilities
-- Event details
+- Event tracking details
+- Targeting probabilities
+- Processing status
 
-Logs are automatically rotated to prevent excessive file size.
+Logs are automatically rotated (1MB per file, maximum 5 backup files) to prevent excessive disk usage.
+
+Example log entry:
+```
+2023-XX-XX XX:XX:XX - LaunchDarklySimulator - INFO - Tracked event 'flag-example-evaluation' for user abc-123 - Type: premium, Region: north, Age: 35 (Flag Value: true, Probability: 0.45)
+```
+
+## Error Handling
+
+The simulator includes robust error handling for:
+- LaunchDarkly client initialization failures
+- Invalid targeting configurations
+- Record processing errors
+- Network connectivity issues
+
+All errors are logged with detailed information for troubleshooting.
 
 ## License
 
