@@ -13,7 +13,8 @@ A configurable traffic simulator for LaunchDarkly feature flags that generates s
   - Control/Treatment probabilities
   - Delay between events
   - Event tracking options
-  - Custom metric names
+  - Metric types (feature or funnel)
+  - Custom metric names (for feature metrics)
 - Detailed logging with rotation
 - Data analysis and visualization capabilities
 
@@ -66,14 +67,18 @@ The simulator is run using Python with various command-line arguments. The SDK k
 # Basic usage with SDK key from environment variable
 python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY
 
-# Custom number of records with event tracking
+# Custom number of records with feature metric tracking
 python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
-    --num-records 1000 --enable-tracking
+    --num-records 1000 --enable-tracking --metric-type feature
 
-# Custom event tracking with specific probabilities
+# Feature metric tracking with specific probabilities and custom name
 python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
-    --enable-tracking --metric-name "custom-metric" \
+    --enable-tracking --metric-type feature --metric-name "custom-metric" \
     --control-prob 0.4 --treatment-prob 0.45
+
+# Funnel metric tracking
+python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
+    --enable-tracking --metric-type funnel
 ```
 
 ### Required Parameters
@@ -89,7 +94,28 @@ python launch_darkly_simulator.py --feature-flag YOUR_FLAG_KEY \
 - `--delay`: Delay between records in seconds (default: 0.05)
 - `--log-file`: Custom log file path (default: simulator.log)
 - `--enable-tracking`: Enable event tracking (flag)
-- `--metric-name`: Custom metric name for tracking events
+- `--metric-type`: Type of metric to track ('feature' or 'funnel', default: 'feature')
+- `--metric-name`: Custom metric name for tracking feature events (ignored for funnel metrics)
+
+### Metric Types
+
+The simulator supports two types of metrics:
+
+#### Feature Metrics
+- Single event tracking with configurable probability
+- Custom metric name can be specified
+- Probability varies based on control/treatment group
+
+#### Funnel Metrics
+- Fixed sequence of 4 events representing a customer journey:
+  1. "store-accessed" (50% of total users)
+  2. "item-added" (50% of store-accessed users)
+  3. "cart-accessed" (50% of item-added users)
+  4. "customer-checkout" (50% of cart-accessed users)
+- Each step has a 50% probability of the previous step's users continuing
+- Results in a natural funnel effect where fewer users complete later steps
+- Metric names are fixed and cannot be customized
+- Control/treatment probabilities do not affect funnel metrics
 
 ### Context Attributes
 
@@ -118,14 +144,19 @@ jupyter notebook Simulate_Percent_Rollout.ipynb
 The simulator creates detailed logs including:
 - User context attributes (user type, region, age)
 - Flag evaluation results
-- Event tracking details
+- Event tracking details (including funnel progression)
 - Processing status
 
 Logs are automatically rotated (1MB per file, maximum 5 backup files) to prevent excessive disk usage.
 
-Example log entry:
+Example log entries:
 ```
-2023-XX-XX XX:XX:XX - LaunchDarklySimulator - INFO - Tracked event 'flag-example-evaluation' for user abc-123 - Type: premium, Region: north, Age: 35 (Flag Value: true, Probability: 0.45)
+# Feature metric tracking
+2023-XX-XX XX:XX:XX - LaunchDarklySimulator - INFO - Tracked feature event 'flag-example-evaluation' for user abc-123 - Type: premium, Region: north, Age: 35 (Flag Value: true, Probability: 0.45)
+
+# Funnel metric tracking
+2023-XX-XX XX:XX:XX - LaunchDarklySimulator - INFO - Tracked funnel event 'store-accessed' for user def-456 - Type: new, Region: east, Age: 28 (Flag Value: true, Cumulative Probability: 0.500)
+2023-XX-XX XX:XX:XX - LaunchDarklySimulator - INFO - Tracked funnel event 'item-added' for user def-456 - Type: new, Region: east, Age: 28 (Flag Value: true, Cumulative Probability: 0.250)
 ```
 
 ## Error Handling

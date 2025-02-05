@@ -64,8 +64,47 @@ def generate_user_data(fake):
         'age': random.randint(18, 80)
     }
 
+def track_funnel_metrics(client, user_context, logger, user_data, variation_detail):
+    """Track funnel metrics with decreasing probabilities"""
+    funnel_steps = [
+        ("store-accessed", 0.5),
+        ("item-added", 0.5),
+        ("cart-accessed", 0.5),
+        ("customer-checkout", 0.5)
+    ]
+    
+    cumulative_prob = 1.0
+    tracked_steps = []
+    
+    for metric_name, step_prob in funnel_steps:
+        # Calculate cumulative probability for this step
+        cumulative_prob *= step_prob
+        
+        if random.random() < cumulative_prob:
+            client.track(metric_name, user_context)
+            tracked_steps.append(metric_name)
+            logger.info(
+                f"Tracked funnel event '{metric_name}' for user {user_data['user_id']} - "
+                f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
+                f"Age: {user_data['age']} "
+                f"(Flag Value: {variation_detail.value}, Cumulative Probability: {cumulative_prob:.3f})"
+            )
+        else:
+            # If a step is not tracked, break the funnel here
+            break
+    
+    if not tracked_steps:
+        logger.info(
+            f"No funnel events tracked for user {user_data['user_id']} - "
+            f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
+            f"Age: {user_data['age']} "
+            f"(Flag Value: {variation_detail.value})"
+        )
+    
+    return tracked_steps
+
 def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, treatment_prob, 
-                    delay, logger, enable_tracking=True, metric_name=None):
+                    delay, logger, metric_type='feature', enable_tracking=True, metric_name=None):
     """Simulate user traffic with LaunchDarkly flag evaluation"""
     default_metric_name = f"flag-{feature_flag_key}-evaluation"
     actual_metric_name = metric_name if metric_name else default_metric_name
@@ -89,23 +128,26 @@ def simulate_traffic(client, feature_flag_key, fake, num_records, control_prob, 
                 False
             )
 
-            # Track event if enabled and probability threshold is met
-            base_prob = treatment_prob if variation_detail.value else control_prob
-            if enable_tracking and random.random() < base_prob:
-                client.track(actual_metric_name, user_context)
-                
-                logger.info(
-                    f"Tracked event '{actual_metric_name}' for user {user_data['user_id']} - "
-                    f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
-                    f"Age: {user_data['age']} "
-                    f"(Flag Value: {variation_detail.value}, Probability: {base_prob:.2f})"
-                )
+            if enable_tracking:
+                if metric_type == 'funnel':
+                    track_funnel_metrics(client, user_context, logger, user_data, variation_detail)
+                else:  # feature metric type
+                    # Track event if probability threshold is met
+                    base_prob = treatment_prob if variation_detail.value else control_prob
+                    if random.random() < base_prob:
+                        client.track(actual_metric_name, user_context)
+                        logger.info(
+                            f"Tracked feature event '{actual_metric_name}' for user {user_data['user_id']} - "
+                            f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
+                            f"Age: {user_data['age']} "
+                            f"(Flag Value: {variation_detail.value}, Probability: {base_prob:.2f})"
+                        )
             else:
                 logger.info(
                     f"Evaluated flag '{feature_flag_key}' for user {user_data['user_id']} - "
                     f"Type: {user_data['user_type']}, Region: {user_data['region']}, "
                     f"Age: {user_data['age']} "
-                    f"(Flag Value: {variation_detail.value}, Tracking: {'Disabled' if not enable_tracking else 'Not Selected'})"
+                    f"(Flag Value: {variation_detail.value}, Tracking: Disabled)"
                 )
 
             time.sleep(delay)
@@ -126,7 +168,9 @@ def main():
     parser.add_argument('--delay', type=float, default=0.05, help='Delay between records in seconds')
     parser.add_argument('--log-file', default='simulator.log', help='Log file path')
     parser.add_argument('--enable-tracking', action='store_true', help='Enable event tracking')
-    parser.add_argument('--metric-name', help='Custom metric name for tracking events')
+    parser.add_argument('--metric-type', choices=['feature', 'funnel'], default='feature', 
+                       help='Type of metric to track (feature or funnel)')
+    parser.add_argument('--metric-name', help='Custom metric name for tracking feature events (ignored for funnel metrics)')
 
     args = parser.parse_args()
     
@@ -134,8 +178,9 @@ def main():
     logger = setup_logging(args.log_file)
     logger.info("Starting LaunchDarkly Traffic Simulator")
     logger.info(f"Event tracking is {'enabled' if args.enable_tracking else 'disabled'}")
-    if args.enable_tracking and args.metric_name:
-        logger.info(f"Using custom metric name: {args.metric_name}")
+    logger.info(f"Metric type: {args.metric_type}")
+    if args.enable_tracking and args.metric_type == 'feature' and args.metric_name:
+        logger.info(f"Using custom feature metric name: {args.metric_name}")
 
     # Get SDK key from command line or environment variable
     sdk_key = args.sdk_key or os.environ.get('LAUNCHDARKLY_SDK_KEY')
@@ -163,6 +208,7 @@ def main():
             treatment_prob=args.treatment_prob,
             delay=args.delay,
             logger=logger,
+            metric_type=args.metric_type,
             enable_tracking=args.enable_tracking,
             metric_name=args.metric_name
         )
