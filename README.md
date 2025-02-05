@@ -109,10 +109,9 @@ The simulator supports two types of metrics:
 #### Funnel Metrics
 - Fixed sequence of 4 events representing a customer journey:
   1. "store-accessed" (50% of total users)
-  2. "item-added" (50% of store-accessed users)
-  3. "cart-accessed" (50% of item-added users)
-  4. "customer-checkout" (50% of cart-accessed users)
-- Each step has a 50% probability of the previous step's users continuing
+  2. "item-added" (70% of store-accessed users)
+  3. "cart-accessed" (60% of item-added users)
+  4. "customer-checkout" (70% of cart-accessed users)
 - Results in a natural funnel effect where fewer users complete later steps
 - Metric names are fixed and cannot be customized
 - Control/treatment probabilities do not affect funnel metrics
